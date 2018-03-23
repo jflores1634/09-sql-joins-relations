@@ -7,7 +7,12 @@ const bodyParser = require('body-parser');
 const PORT = process.env.PORT || 3000;
 const app = express();
 
-const conString = 'postgres://postgres:1234@localhost:5432/kilovolt';
+// WINDOWS
+// const conString = 'postgres://postgres:1234@localhost:5432/kilovolt';
+
+// MAC
+const conString = 'postgres://localhost:5432'
+
 const client = new pg.Client(conString);
 client.connect();
 client.on('error', error => {
@@ -25,10 +30,11 @@ app.get('/new', (request, response) => {
 
 // REVIEW: These are routes for making API calls to enact CRUD operations on our database.
 app.get('/articles', (request, response) => {
-  client.query(`SELECT * FROM articles
-INNER JOIN authors
-ON authors.author_id=articles.author_id;
-`)
+  client.query(
+    `SELECT * FROM articles
+    INNER JOIN authors
+    ON authors.author_id=articles.author_id;`
+    )
     .then(result => {
       response.send(result.rows);
     })
@@ -39,8 +45,9 @@ ON authors.author_id=articles.author_id;
 
 app.post('/articles', (request, response) => {
   client.query(
-    'INSERT INTO authors(author, "authorUrl") VALUES ($1, $2) ON CONFLICT DO NOTHING',
-    [request.body.author,
+    `INSERT INTO authors(author, "authorUrl") VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [
+      request.body.author,
       request.body.authorUrl
     ],
     function(err) {
@@ -52,8 +59,11 @@ app.post('/articles', (request, response) => {
 
   function queryTwo() {
     client.query(
-      `SELECT authors.author_id FROM authors`,
-      [request.body.author],
+      `SELECT author_id FROM authors 
+      WHERE author=$1`,
+      [
+        request.body.author
+      ],
       function(err, result) {
         if (err) console.error(err);
 
@@ -64,9 +74,18 @@ app.post('/articles', (request, response) => {
   }
 
   function queryThree(author_id) {
+    console.log(author_id);
     client.query(
-      `SELECT articles.author_id FROM articles`,
-      [request.body.author_id],
+      `INSERT INTO
+      articles(author_id, title, category, "publishedOn", body)
+      VALUES ($1, $2, $3, $4, $5);`,
+      [
+        author_id,
+        request.body.title,
+        request.body.category,
+        request.body.publishedOn,
+        request.body.body
+      ],
       function(err) {
         if (err) console.error(err);
         response.send('insert complete');
@@ -77,13 +96,27 @@ app.post('/articles', (request, response) => {
 
 app.put('/articles/:id', function(request, response) {
   client.query(
-    ``,
-    []
-  )
+    `UPDATE authors
+    SET author=$1, "authorUrl"=$2
+    WHERE author_id=$3;`,
+    [
+      request.body.author,
+      request.body.authorUrl,
+      request.body.author_id
+    ]
+    )
     .then(() => {
       client.query(
-        ``,
-        []
+        `UPDATE articles
+        SET author_id=$1, title=$2, category=$3, "publishedOn"=$4, body=$5
+        WHERE author_id=$1;`,
+        [
+        request.body.author_id,
+        request.body.title,
+        request.body.category,
+        request.body.publishedOn,
+        request.body.body
+      ]
       )
     })
     .then(() => {
@@ -97,7 +130,9 @@ app.put('/articles/:id', function(request, response) {
 app.delete('/articles/:id', (request, response) => {
   client.query(
     `DELETE FROM articles WHERE article_id=$1;`,
-    [request.params.id]
+    [
+      request.params.id
+    ]
   )
     .then(() => {
       response.send('Delete complete');
@@ -108,7 +143,7 @@ app.delete('/articles/:id', (request, response) => {
 });
 
 app.delete('/articles', (request, response) => {
-  client.query('DELETE FROM articles')
+  client.query('DELETE FROM articles;')
     .then(() => {
       response.send('Delete complete');
     })
@@ -133,7 +168,7 @@ function loadAuthors() {
   fs.readFile('./public/data/hackerIpsum.json', 'utf8', (err, fd) => {
     JSON.parse(fd).forEach(ele => {
       client.query(
-        'INSERT INTO authors(author, "authorUrl") VALUES($1, $2) ON CONFLICT DO NOTHING',
+        'INSERT INTO authors(author, "authorUrl") VALUES($1, $2) ON CONFLICT DO NOTHING;',
         [ele.author, ele.authorUrl]
       )
     })
@@ -147,13 +182,12 @@ function loadArticles() {
       if(!parseInt(result.rows[0].count)) {
         fs.readFile('./public/data/hackerIpsum.json', 'utf8', (err, fd) => {
           JSON.parse(fd).forEach(ele => {
-            client.query(`
-            INSERT INTO
+            client.query(
+            `INSERT INTO
             articles(author_id, title, category, "publishedOn", body)
             SELECT author_id, $1, $2, $3, $4
             FROM authors
-            WHERE author=$5;
-            `,
+            WHERE author=$5;`,
               [ele.title, ele.category, ele.publishedOn, ele.body, ele.author]
             )
           })
